@@ -77,7 +77,8 @@ target_compile_definitions(lf-trace-impl PRIVATE LOG_LEVEL=${LOG_LEVEL})
 
 # make name platform-independent
 set_target_properties(lf-trace-impl PROPERTIES PREFIX "")
-set_target_properties(lf-trace-impl PROPERTIES OUTPUT_NAME "lf-trace-impl")
+# NOTE: the output filename MUST be prefixed with `lib`, otherwise `find_library` cannot find it.
+set_target_properties(lf-trace-impl PROPERTIES OUTPUT_NAME "liblf-trace-impl")
 set_target_properties(lf-trace-impl PROPERTIES SUFFIX ".a")
 set_target_properties(lf-trace-impl PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/lib")
 set_target_properties(lf-trace-impl PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_LIST_DIR}/lib")

@@ -8,7 +8,5 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUILD_DIR="${SCRIPT_DIR}/build"
 
-echo "Configuring CMake..."
 cmake -S "${SCRIPT_DIR}" -B "${BUILD_DIR}" -DLOG_LEVEL=4 --no-warn-unused-cli
-echo "Building..."
 cmake --build "${BUILD_DIR}" --target lf-trace-impl --verbose
