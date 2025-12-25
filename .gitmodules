@@ -1,0 +1,3 @@
+[submodule "third-party/opentelemetry-c"]
+	path = third-party/opentelemetry-c
+	url = https://github.com/lf-lang/opentelemetry-c.git
