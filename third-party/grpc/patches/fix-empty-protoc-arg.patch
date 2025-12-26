@@ -1,0 +1,18 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -601,2 +601,11 @@ function(protobuf_generate_grpc_cpp_with_import_path_correction FILE_LOCATION IMPORT_PATH)
+-  # Sets the include path for ProtoBuf files
+-  set(_protobuf_include_path -I . -I ${_gRPC_PROTOBUF_WELLKNOWN_INCLUDE_DIR})
++  # Sets the include path for ProtoBuf files.
++  #
++  # _gRPC_PROTOBUF_WELLKNOWN_INCLUDE_DIR may contain empty list elements (e.g. from
++  # INTERFACE_INCLUDE_DIRECTORIES). Expanding those into ARGS would pass an empty string ("")
++  # argument to protoc, which protoc rejects.
++  set(_protobuf_include_path -I .)
++  foreach(_dir IN LISTS _gRPC_PROTOBUF_WELLKNOWN_INCLUDE_DIR)
++    if(_dir)
++      list(APPEND _protobuf_include_path -I ${_dir})
++    endif()
++  endforeach()
+
