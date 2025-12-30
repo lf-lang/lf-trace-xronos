@@ -25,6 +25,8 @@ endif()
 
 option(INCLUDE_OTEL "Include the otel telemetry backend in the build" ON)
 if(INCLUDE_OTEL)
+  # Ensure all OpenTelemetry libraries are built as static libraries
+  set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
   include(third-party/absl/absl.cmake)
   include(third-party/protobuf/protobuf.cmake)
   include(third-party/grpc/grpc.cmake)
@@ -48,7 +50,7 @@ FetchContent_Declare(
 # FetchContent automatically caches in ${CMAKE_BINARY_DIR}/_deps/reactor-c-src
 FetchContent_GetProperties(reactor-c)
 if(NOT reactor-c_POPULATED)
-    message(STATUS "Fetching reactor-c repository (this will be cached)...")
+    message(STATUS "Fetching reactor-c repository ...")
     # Use FetchContent_Populate instead of MakeAvailable to only fetch source without building
     FetchContent_Populate(reactor-c)
     message(STATUS "reactor-c repository fetched and cached")
@@ -81,6 +83,7 @@ if(NOT TARGET lf::version-api)
 endif()
 
 # Add opentelemetry-c as a subdirectory
+# BUILD_SHARED_LIBS is already set to OFF above, so opentelemetry-c will be built as static
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third-party/opentelemetry-c)
 
 add_library(lf-trace-impl STATIC)
@@ -89,7 +92,7 @@ target_link_libraries(lf-trace-impl PRIVATE lf::trace-api)
 target_link_libraries(lf-trace-impl PRIVATE lf::platform-api)
 target_link_libraries(lf-trace-impl PRIVATE lf::logging-api)
 target_link_libraries(lf-trace-impl PRIVATE lf::version-api)
-target_link_libraries(lf-trace-impl PRIVATE opentelemetry-c)
+target_link_libraries(lf-trace-impl PUBLIC opentelemetry-c)
 lf_enable_compiler_warnings(lf-trace-impl)
 
 target_sources(lf-trace-impl PUBLIC 

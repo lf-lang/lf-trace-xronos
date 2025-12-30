@@ -7,32 +7,6 @@
  * 
  * This file provides a C equivalent of the C++ OtelTelemetryBackend class.
  * 
- * Usage example:
- * @code
- *   #include "otel_backend.h"
- *   #include <unistd.h>
- *   
- *   // Create backend
- *   otel_backend_t* backend = otel_backend_create(
- *     "https://api.example.com:4317",
- *     "my-application",
- *     "hostname.example.com",
- *     getpid()
- *   );
- *   
- *   // Initialize (configures exporter and tracer provider)
- *   if (otel_backend_initialize(backend) != 0) {
- *     // Handle error
- *   }
- *   
- *   // Use OpenTelemetry tracing...
- *   void* tracer = otelc_get_tracer();
- *   // ... create spans, etc.
- *   
- *   // Cleanup
- *   otel_backend_destroy(backend);
- * @endcode
- * 
  * Note: Batch span processor delay can be configured at compile time by defining
  * BATCH_SPAN_PROCESSOR_SCHEDULE_DELAY_MILLIS (default is 500ms in the C++ version).
  */
@@ -47,10 +21,6 @@
 
 #include "opentelemetry_c/opentelemetry_c.h"
 #include "otel_backend.h"
-
-// Forward declarations
-static char* get_deployment_id(void);
-static int configure_exporter(const char* endpoint);
 
 /**
  * @brief Generate a random deployment ID (hexadecimal string)
