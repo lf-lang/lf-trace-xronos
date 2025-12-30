@@ -44,126 +44,23 @@ static version_t version = {.build_config =
 // PRIVATE HELPERS ***********************************************************
 
 /**
- * @brief Find object description by matching pointer
- * 
- * Searches the trace object descriptions table for an entry matching the given pointer.
- * 
- * @param pointer The pointer to match
- * @return Pointer to matching object_description_t, or NULL if not found
- */
-static object_description_t* find_object_description(void* pointer) {
-  if (!pointer) {
-    return NULL;
-  }
-  
-  for (size_t i = 0; i < trace._lf_trace_object_descriptions_size; i++) {
-    if (trace._lf_trace_object_descriptions[i].pointer == pointer) {
-      return &trace._lf_trace_object_descriptions[i];
-    }
-  }
-  
-  return NULL;
-}
-
-/**
- * @brief Extract name from FQN (last component after last '.')
- * 
- * @param fqn The fully qualified name
- * @return Pointer to name within fqn string, or fqn itself if no '.' found
- */
-static const char* extract_name_from_fqn(const char* fqn) {
-  if (!fqn) {
-    return NULL;
-  }
-  
-  const char* last_dot = strrchr(fqn, '.');
-  if (last_dot) {
-    return last_dot + 1; // Return part after last '.'
-  }
-  
-  return fqn; // No '.', return whole string as name
-}
-
-/**
- * @brief Extract container FQN from a full FQN
- * 
- * If FQN contains '.', extracts everything before the last '.'.
- * Otherwise returns NULL (no container).
- * 
- * @param fqn The fully qualified name
- * @return Container FQN (caller must free) or NULL if no container
- */
-static char* extract_container_fqn(const char* fqn) {
-  if (!fqn) {
-    return NULL;
-  }
-  
-  const char* last_dot = strrchr(fqn, '.');
-  if (!last_dot) {
-    return NULL; // No container
-  }
-  
-  size_t container_len = last_dot - fqn;
-  char* container_fqn = malloc(container_len + 1);
-  if (!container_fqn) {
-    return NULL;
-  }
-  
-  strncpy(container_fqn, fqn, container_len);
-  container_fqn[container_len] = '\0';
-  return container_fqn;
-}
-
-/**
  * @brief Build a comma-separated string of low cardinality attribute names
  * 
- * Creates a string like "xronos.fqn,xronos.name,xronos.element_type,..."
+ * Creates a string like "xronos.element_type"
  * Note: This list does NOT include xronos.schema.low_cardinality_attributes itself
  * 
- * @param has_container_fqn Whether container_fqn was added
  * @return Comma-separated string (caller must free) or NULL on failure
  */
-static char* build_low_cardinality_attributes_list(int has_container_fqn) {
-  // Standard low cardinality attributes for reactions
-  const char* base_attrs[] = {
-    "xronos.fqn",
-    "xronos.name",
-    "xronos.element_type"
-  };
+static char* build_low_cardinality_attributes_list(void) {
+  // Only element_type is included since we're not using description field
+  const char* attrs = "xronos.element_type";
   
-  // Calculate total length needed (including commas between attributes)
-  size_t total_len = 0;
-  for (size_t i = 0; i < sizeof(base_attrs) / sizeof(base_attrs[0]); i++) {
-    total_len += strlen(base_attrs[i]);
-    if (i < sizeof(base_attrs) / sizeof(base_attrs[0]) - 1 || has_container_fqn) {
-      total_len += 1; // comma
-    }
-  }
-  if (has_container_fqn) {
-    total_len += strlen("xronos.container_fqn");
-  }
-  total_len += 1; // null terminator
-  
-  char* result = malloc(total_len);
+  char* result = malloc(strlen(attrs) + 1);
   if (!result) {
     return NULL;
   }
   
-  result[0] = '\0';
-  
-  // Add base attributes
-  for (size_t i = 0; i < sizeof(base_attrs) / sizeof(base_attrs[0]); i++) {
-    if (i > 0) {
-      strcat(result, ",");
-    }
-    strcat(result, base_attrs[i]);
-  }
-  
-  // Add container_fqn if present
-  if (has_container_fqn) {
-    strcat(result, ",xronos.container_fqn");
-  }
-  
+  strcpy(result, attrs);
   return result;
 }
 
@@ -203,59 +100,30 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
     return;
   }
   
-  // Find object description by matching pointer
-  object_description_t* desc = find_object_description(tr->pointer);
-  
-  // Determine span name from description or use default
+  // Use default span name (not using description field)
   const char* span_name = "reaction";
-  const char* fqn = desc && desc->description ? desc->description : NULL;
-  const char* name = NULL;
-  
-  if (fqn && fqn[0] != '\0') {
-    name = extract_name_from_fqn(fqn);
-    if (name && name[0] != '\0') {
-      span_name = name;
-    }
-  }
   
   void *span = otelc_start_span(tracer, span_name, OTELC_SPAN_KIND_INTERNAL, "");
   
-  // Create attribute map for low cardinality attributes first
+  // Create attribute map for low cardinality attributes
   void *map = otelc_create_attr_map();
-  int has_container_fqn = 0;
   
   // Add low cardinality attributes
-  if (desc) {
-    // xronos.fqn (from description field)
-    if (fqn && fqn[0] != '\0') {
-      otelc_set_str_attr(map, "xronos.fqn", fqn);
-    }
-    
-    // xronos.name (extracted from FQN)
-    if (name && name[0] != '\0') {
-      otelc_set_str_attr(map, "xronos.name", name);
-    }
-    
-    // xronos.element_type
-    // For reaction spans, element_type is always "reaction"
-    otelc_set_str_attr(map, "xronos.element_type", "reaction");
-    
-    // xronos.container_fqn (only if FQN contains '.')
-    if (fqn && fqn[0] != '\0') {
-      char* container_fqn = extract_container_fqn(fqn);
-      if (container_fqn) {
-        otelc_set_str_attr(map, "xronos.container_fqn", container_fqn);
-        has_container_fqn = 1;
-        free(container_fqn);
-      }
-    }
-  }
+  // xronos.element_type - For reaction spans, element_type is always "reaction"
+  const char* element_type_value = "reaction";
+  // Use bytes instead of string to avoid UTF-8 validation issues
+  otelc_set_bytes_attr(map, "xronos.element_type", 
+                       (const uint8_t*)element_type_value, 
+                       strlen(element_type_value));
   
   // Build and add schema metadata (list of low cardinality attributes)
   // This should be computed before adding high cardinality attributes
-  char* low_card_attrs_list = build_low_cardinality_attributes_list(has_container_fqn);
+  char* low_card_attrs_list = build_low_cardinality_attributes_list();
   if (low_card_attrs_list) {
-    otelc_set_str_attr(map, "xronos.schema.low_cardinality_attributes", low_card_attrs_list);
+    // Use bytes instead of string to avoid UTF-8 validation issues
+    otelc_set_bytes_attr(map, "xronos.schema.low_cardinality_attributes", 
+                         (const uint8_t*)low_card_attrs_list, 
+                         strlen(low_card_attrs_list));
     free(low_card_attrs_list);
   }
   
@@ -301,8 +169,8 @@ void lf_tracing_global_init(char* process_name, char* process_names, int fedid, 
 
   // Create backend
   backend = otel_backend_create(
-    "0.0.0.0:4317",
-    "lf-trace-xronos",
+    "http://localhost:4317",
+    "xronos",
     "lf-lang.org",
     getpid()
   );
