@@ -32,44 +32,22 @@ The install directory is created at `./install` by default. You can specify a cu
 
 ### Step 2: Use the plugin in your LF program
 
-#### Option A: Auto-detection (recommended)
-
-If `plugin.cmake` is in the same directory as your LF program's `install/` directory, it will auto-detect:
-
-```lf
-target C {
-  tracing: true,
-  cmake-include: ["plugin.cmake"],
-}
-```
-
-#### Option B: Specify install directory explicitly
-
-Set the install directory via CMake variable:
-
-```bash
-lfc-dev -c MyProgram.lf --tracing --cmake-define LF_TRACE_INSTALL=/abs/path/to/lf-trace-xronos/install
-```
-
-Or via environment variable:
+Set the install directory via environment variable and include `plugin.cmake`:
 
 ```bash
 export LF_TRACE_INSTALL=/abs/path/to/lf-trace-xronos/install
 lfc-dev -c MyProgram.lf --tracing
 ```
 
-#### Option C: Copy plugin.cmake to your project
-
-Copy `plugin.cmake` to your LF program directory and reference it:
+In your LF file:
 
 ```lf
 target C {
   tracing: true,
-  cmake-include: ["path/to/plugin.cmake"],
+  trace-plugin: true,
+  cmake-include: ["/abs/path/to/lf-trace-xronos/plugin.cmake"],
 }
 ```
-
-Then set `LF_TRACE_INSTALL` as described in Option B.
 
 ## What plugin.cmake Does
 
