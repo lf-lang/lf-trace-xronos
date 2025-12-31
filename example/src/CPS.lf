@@ -1,0 +1,37 @@
+target C {
+    tracing: true, // Turn on tracing.
+    trace-plugin: true, // When set to true, the compiler expects a cmake file that links against the plugin library.
+    cmake-include: ["../../plugin.cmake"], // Relative or absolute path to plugin.cmake.
+}
+
+reactor Sensor {
+    output out:int
+    timer t(0, 1s)
+    state s:int = 0
+    reaction(t) -> out {=
+        lf_set(out, self->s++);    
+    =}
+}
+
+reactor Processing {
+    input in:int
+    output out:int
+    reaction(in) -> out {=
+        lf_set(out, in->value * -2);
+    =}
+}
+
+reactor Actuator {
+    input in:int 
+    reaction(in) {=
+        printf("Received %d\n", in->value);
+    =}
+}
+
+main reactor {
+    s = new Sensor()
+    p = new Processing()
+    a = new Actuator()
+    s.out -> p.in
+    p.out -> a.in
+}

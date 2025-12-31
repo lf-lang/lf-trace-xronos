@@ -1,3 +1,6 @@
 build/
 lib/
 install/
+example/bin/
+example/src-gen/
+example/include

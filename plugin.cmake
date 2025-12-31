@@ -3,7 +3,7 @@
 #
 # Usage in .lf file:
 #   target C {
-#       cmake-include: ["plugin.cmake"]
+#       cmake-include: ["relative/or/absolute/path/to/plugin.cmake"]
 #   };
 #
 # Build the plugin once to create a reusable install folder:
@@ -27,8 +27,8 @@ if(NOT DEFINED LF_TRACE_INSTALL)
   else()
     message(FATAL_ERROR
       "LF_TRACE_INSTALL is not set.\n"
-      "Build the plugin install directory first (e.g. ./build.sh)\n"
-      "and then set LF_TRACE_INSTALL (CMake -D or environment variable) when building your LF program.")
+      "Build the plugin install directory first by running build.sh.\n"
+      "and then set LF_TRACE_INSTALL (CMake -D or environment variable) to the absolute path of the `install` directory before building your LF program.")
   endif()
 endif()
 
