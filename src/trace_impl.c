@@ -31,6 +31,21 @@ otel_backend_t* backend;
 static void* tracer;
 static int64_t start_time;
 static int trace_only_reactions = 1;  // Default: only trace reaction events (reaction_starts, reaction_ends). Set LF_TRACE_VERBOSE=1 to trace all events.
+
+// Thread-local storage for an in-flight reaction span on the current OS thread.
+// The LF runtime emits reaction tracepoints as a pair:
+// - reaction_starts: immediately before invoking a reaction
+// - reaction_ends:   immediately after the reaction returns
+// We create the span on reaction_starts and end it on reaction_ends.
+#if __STDC_VERSION__ >= 201112L
+#define LF_THREAD_LOCAL _Thread_local
+#else
+#define LF_THREAD_LOCAL __thread
+#endif
+
+static LF_THREAD_LOCAL void* active_reaction_span = NULL;
+static LF_THREAD_LOCAL void* active_reaction_pointer = NULL;
+static LF_THREAD_LOCAL int active_reaction_dst_id = -1;
 static version_t version = {.build_config =
                                 {
                                     .single_threaded = TRIBOOL_DOES_NOT_MATTER,
@@ -198,6 +213,24 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
     }
     return;
   }
+
+  // Fast-path: reaction_ends ends the span that was started on reaction_starts.
+  // Do this before any name/attribute computation to avoid unnecessary work.
+  if (tr->event_type == reaction_ends) {
+    void* span = active_reaction_span;
+    if (span) {
+      // Sanity-check pointer/dst_id when available. Even if mismatched, end to avoid leaks.
+      otelc_end_span(span);
+    }
+    active_reaction_span = NULL;
+    active_reaction_pointer = NULL;
+    active_reaction_dst_id = -1;
+
+    if (tid < 0) {
+      lf_platform_mutex_unlock(trace_mutex);
+    }
+    return;
+  }
   
   // Get event type name (will be used as fallback or for non-reaction events)
   const char* event_type_name = get_event_type_name(tr->event_type);
@@ -249,15 +282,16 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
   }
   // For non-reaction events, span_name is already set to event_type_name
   
-  // Start a span.
+  // For reaction_starts and (in verbose mode) any non-reaction events, start a span now.
+  // Note: reaction_starts spans will be ended when we later receive reaction_ends.
   void *span = otelc_start_span(tracer, span_name, OTELC_SPAN_KIND_INTERNAL, "");
   
   // Create attribute map for low cardinality attributes
   void *map = otelc_create_attr_map();
   
   // Add low cardinality attributes
-  // xronos.element_type - For reaction spans, element_type is always "reaction"
-  const char* element_type_value = "reaction";
+  // xronos.element_type
+  const char* element_type_value = is_reaction_event ? "reaction" : "trace_event";
   // Use bytes instead of string to avoid UTF-8 validation issues
   otelc_set_bytes_attr(map, "xronos.element_type", 
                        (const uint8_t*)element_type_value, 
@@ -320,8 +354,20 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
   // Set high cardinality attributes on span
   otelc_set_span_attrs(span, map);
   otelc_destroy_attr_map(map);
-  
-  otelc_end_span(span);
+
+  if (tr->event_type == reaction_starts) {
+    // Stash the span so we can end it on the corresponding reaction_ends tracepoint.
+    // If a previous span is still active on this thread, end it to avoid leaking.
+    if (active_reaction_span) {
+      otelc_end_span(active_reaction_span);
+    }
+    active_reaction_span = span;
+    active_reaction_pointer = tr->pointer;
+    active_reaction_dst_id = tr->dst_id;
+  } else {
+    // Non-reaction events are emitted as single tracepoints; end immediately.
+    otelc_end_span(span);
+  }
   
   // Free allocated memory
   if (reaction_fqn) {
