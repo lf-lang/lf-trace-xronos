@@ -60,6 +60,134 @@ static version_t version = {.build_config =
 
 // PRIVATE HELPERS ***********************************************************
 
+// Forward declaration (used by helper functions below).
+static char* build_low_cardinality_attributes_list(int has_description, int has_container_fqn);
+
+/**
+ * @brief Set common high-cardinality attributes on a span.
+ *
+ * High cardinality attributes: timestamp, microstep, lag.
+ */
+static void set_common_high_cardinality_attributes(void* span, const trace_record_nodeps_t* tr) {
+  if (!span || !tr) {
+    return;
+  }
+  void* map = otelc_create_attr_map();
+  otelc_set_int64_t_attr(map, "xronos.timestamp", tr->logical_time);
+  otelc_set_int64_t_attr(map, "xronos.microstep", tr->microstep);
+  otelc_set_int64_t_attr(map, "xronos.lag", tr->physical_time - tr->logical_time);
+  otelc_set_span_attrs(span, map);
+  otelc_destroy_attr_map(map);
+}
+
+/**
+ * @brief Add xronos.schema.low_cardinality_attributes to an attribute map.
+ */
+static void set_low_cardinality_schema_attr(void* map, int has_description, int has_container_fqn) {
+  if (!map) {
+    return;
+  }
+  char* low_card_attrs_list = build_low_cardinality_attributes_list(has_description, has_container_fqn);
+  if (low_card_attrs_list) {
+    otelc_set_bytes_attr(map, "xronos.schema.low_cardinality_attributes",
+                         (const uint8_t*)low_card_attrs_list,
+                         strlen(low_card_attrs_list));
+    free(low_card_attrs_list);
+  }
+}
+
+/**
+ * @brief Build a reaction FQN as "<reactor_fqn>.<reaction_number>".
+ *
+ * @return malloc'd string owned by the caller, or NULL if not enough information.
+ */
+static char* build_reaction_fqn(const object_description_t* reactor_desc, int reaction_number) {
+  if (!reactor_desc || !reactor_desc->description || reactor_desc->description[0] == '\0') {
+    return NULL;
+  }
+  if (reaction_number < 0) {
+    return NULL;
+  }
+  const char* reactor_name = reactor_desc->description;
+  size_t fqn_len = strlen(reactor_name) + 1 + 20 + 1; // reactor + "." + number + null
+  char* reaction_fqn = (char*)malloc(fqn_len);
+  if (!reaction_fqn) {
+    return NULL;
+  }
+  snprintf(reaction_fqn, fqn_len, "%s.%d", reactor_name, reaction_number);
+  return reaction_fqn;
+}
+
+/**
+ * @brief Set low-cardinality attributes for a reaction span.
+ *
+ * Note: We cannot iterate the opaque otelc attribute map to compute the
+ * low-cardinality attribute list dynamically, so we compute the expected list
+ * based on what we set.
+ */
+static void set_reaction_low_cardinality_attributes(void* span,
+                                                    const char* reaction_fqn,
+                                                    int reaction_number,
+                                                    const char* reactor_fqn) {
+  if (!span) {
+    return;
+  }
+
+  void* map = otelc_create_attr_map();
+
+  const char* element_type_value = "reaction";
+  otelc_set_bytes_attr(map, "xronos.element_type",
+                       (const uint8_t*)element_type_value,
+                       strlen(element_type_value));
+
+  // We only set xronos.fqn/xronos.name/xronos.container_fqn if we have a reaction_fqn.
+  const int has_description = (reaction_fqn != NULL);
+  int has_container_fqn = 0;
+
+  if (reaction_fqn) {
+    otelc_set_bytes_attr(map, "xronos.fqn",
+                         (const uint8_t*)reaction_fqn,
+                         strlen(reaction_fqn));
+
+    char reaction_name_str[32];
+    snprintf(reaction_name_str, sizeof(reaction_name_str), "%d", reaction_number);
+    otelc_set_bytes_attr(map, "xronos.name",
+                         (const uint8_t*)reaction_name_str,
+                         strlen(reaction_name_str));
+
+    if (reactor_fqn && reactor_fqn[0] != '\0') {
+      otelc_set_bytes_attr(map, "xronos.container_fqn",
+                           (const uint8_t*)reactor_fqn,
+                           strlen(reactor_fqn));
+      has_container_fqn = 1;
+    }
+  }
+
+  set_low_cardinality_schema_attr(map, has_description, has_container_fqn);
+
+  otelc_set_span_attrs(span, map);
+  otelc_destroy_attr_map(map);
+}
+
+/**
+ * @brief Set low-cardinality attributes for a generic (non-reaction) trace event span.
+ */
+static void set_event_low_cardinality_attributes(void* span) {
+  if (!span) {
+    return;
+  }
+
+  void* map = otelc_create_attr_map();
+  const char* element_type_value = "trace_event";
+  otelc_set_bytes_attr(map, "xronos.element_type",
+                       (const uint8_t*)element_type_value,
+                       strlen(element_type_value));
+  // Only element_type is set.
+  set_low_cardinality_schema_attr(map, 0, 0);
+  otelc_set_span_attrs(span, map);
+  otelc_destroy_attr_map(map);
+}
+
 /**
  * @brief Find object description by matching pointer
  * 
@@ -217,10 +345,9 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
   // Fast-path: reaction_ends ends the span that was started on reaction_starts.
   // Do this before any name/attribute computation to avoid unnecessary work.
   if (tr->event_type == reaction_ends) {
-    void* span = active_reaction_span;
-    if (span) {
-      // Sanity-check pointer/dst_id when available. Even if mismatched, end to avoid leaks.
-      otelc_end_span(span);
+    if (active_reaction_span) {
+      // Even if mismatched, end to avoid leaking spans.
+      otelc_end_span(active_reaction_span);
     }
     active_reaction_span = NULL;
     active_reaction_pointer = NULL;
@@ -232,147 +359,47 @@ void lf_tracing_tracepoint(int worker, trace_record_nodeps_t* tr) {
     return;
   }
   
-  // Get event type name (will be used as fallback or for non-reaction events)
-  const char* event_type_name = get_event_type_name(tr->event_type);
-  
-  // Find reactor description by matching pointer
-  // Note: tr->pointer points to the reactor's self struct, not the reaction itself
-  // Reactions are not registered in the object table - only reactors are
-  object_description_t* reactor_desc = find_object_description(tr->pointer);
-  
-  // Determine span name based on event type
-  // For reaction events (reaction_starts, reaction_ends), use FQN when available
-  // For all other events, use event type name
-  const char* span_name = event_type_name;  // Default to event type name
-  int has_description = 0;
-  int has_container_fqn = 0;
-  char* reaction_fqn = NULL;
-  
-  if (is_reaction_event) {
-    // For reaction events, try to build FQN: reactor_name + "." + reaction_number
-    // Example: "MyReactor.0", "Parent.Child.1"
-    // tr->dst_id contains the reaction number (0, 1, 2, ...)
-    if (reactor_desc && reactor_desc->description && reactor_desc->description[0] != '\0') {
-      // Get reactor name
-      const char* reactor_name = reactor_desc->description;
-      
-      // Build FQN: reactor_name + "." + reaction_number
-      if (tr->dst_id >= 0) {
-        // Calculate length: reactor_name + "." + reaction_number (max digits) + null terminator
-        // Reaction numbers are typically small, but allocate enough space
-        size_t fqn_len = strlen(reactor_name) + 1 + 20 + 1; // reactor + "." + number + null
-        reaction_fqn = malloc(fqn_len);
-        if (reaction_fqn) {
-          snprintf(reaction_fqn, fqn_len, "%s.%d", reactor_name, tr->dst_id);
-          span_name = reaction_fqn;  // Use FQN as span name (e.g., "MyReactor.0")
-          has_description = 1;
-          
-          // Check if reactor_name contains '.' to determine if container_fqn exists
-          if (strchr(reactor_name, '.') != NULL) {
-            has_container_fqn = 1;
-          }
-        }
-      } else {
-        // No reaction number, just use reactor name
-        span_name = reactor_name;
-        has_description = 1;
-      }
-    }
-    // If reactor_desc not found or no description, span_name remains event_type_name
-  }
-  // For non-reaction events, span_name is already set to event_type_name
-  
-  // For reaction_starts and (in verbose mode) any non-reaction events, start a span now.
-  // Note: reaction_starts spans will be ended when we later receive reaction_ends.
-  void *span = otelc_start_span(tracer, span_name, OTELC_SPAN_KIND_INTERNAL, "");
-  
-  // Create attribute map for low cardinality attributes
-  void *map = otelc_create_attr_map();
-  
-  // Add low cardinality attributes
-  // xronos.element_type
-  const char* element_type_value = is_reaction_event ? "reaction" : "trace_event";
-  // Use bytes instead of string to avoid UTF-8 validation issues
-  otelc_set_bytes_attr(map, "xronos.element_type", 
-                       (const uint8_t*)element_type_value, 
-                       strlen(element_type_value));
-  
-  // xronos.fqn - Fully Qualified Name (e.g., "MyReactor.0", "Parent.Child.1")
-  if (has_description && reaction_fqn) {
-    otelc_set_bytes_attr(map, "xronos.fqn", 
-                         (const uint8_t*)reaction_fqn, 
-                         strlen(reaction_fqn));
-    
-    // xronos.name - The reaction number as a string (e.g., "0" from "MyReactor.0")
-    char reaction_name_str[32];
-    snprintf(reaction_name_str, sizeof(reaction_name_str), "%d", tr->dst_id);
-    otelc_set_bytes_attr(map, "xronos.name", 
-                         (const uint8_t*)reaction_name_str, 
-                         strlen(reaction_name_str));
-    
-    // xronos.container_fqn - The reactor name (e.g., "MyReactor" from "MyReactor.0")
-    if (reactor_desc && reactor_desc->description) {
-      otelc_set_bytes_attr(map, "xronos.container_fqn", 
-                           (const uint8_t*)reactor_desc->description, 
-                           strlen(reactor_desc->description));
-      has_container_fqn = 1;
-    }
-  }
-  
-  // Build and add schema metadata (list of low cardinality attributes)
-  // This should be computed before adding high cardinality attributes
-  char* low_card_attrs_list = build_low_cardinality_attributes_list(has_description, has_container_fqn);
-  if (low_card_attrs_list) {
-    // Use bytes instead of string to avoid UTF-8 validation issues
-    otelc_set_bytes_attr(map, "xronos.schema.low_cardinality_attributes", 
-                         (const uint8_t*)low_card_attrs_list, 
-                         strlen(low_card_attrs_list));
-    free(low_card_attrs_list);
-  }
-  
-  // Set low cardinality attributes on span
-  otelc_set_span_attrs(span, map);
-  otelc_destroy_attr_map(map);
-  
-  // Now add high cardinality attributes in a separate attribute map
-  // High cardinality attributes: timestamp, microstep, lag
-  map = otelc_create_attr_map();
-  
-  // Extract high cardinality data from trace record
-  // xronos.timestamp (logical timestamp)
-  int64_t timestamp = tr->logical_time;
-  otelc_set_int64_t_attr(map, "xronos.timestamp", timestamp);
-  
-  // xronos.microstep
-  int64_t microstep = tr->microstep;
-  otelc_set_int64_t_attr(map, "xronos.microstep", microstep);
-  
-  // xronos.lag (system clock - logical time)
-  int64_t lag = tr->physical_time - tr->logical_time;
-  otelc_set_int64_t_attr(map, "xronos.lag", lag);
-  
-  // Set high cardinality attributes on span
-  otelc_set_span_attrs(span, map);
-  otelc_destroy_attr_map(map);
-
   if (tr->event_type == reaction_starts) {
-    // Stash the span so we can end it on the corresponding reaction_ends tracepoint.
-    // If a previous span is still active on this thread, end it to avoid leaking.
+    // Reaction span start: name it "<reactor_fqn>.<reaction_number>" when possible.
+    object_description_t* reactor_desc = find_object_description(tr->pointer);
+    char* reaction_fqn = build_reaction_fqn(reactor_desc, tr->dst_id);
+    const char* span_name =
+        (reaction_fqn != NULL) ? reaction_fqn :
+        (reactor_desc && reactor_desc->description && reactor_desc->description[0] != '\0')
+            ? reactor_desc->description
+            : "reaction";
+
+    void* span = otelc_start_span(tracer, span_name, OTELC_SPAN_KIND_INTERNAL, "");
+    set_reaction_low_cardinality_attributes(span,
+                                           reaction_fqn,
+                                           tr->dst_id,
+                                           (reactor_desc ? reactor_desc->description : NULL));
+    set_common_high_cardinality_attributes(span, tr);
+
+    // Stash span to be ended by reaction_ends. End any previous active span to avoid leaks.
     if (active_reaction_span) {
       otelc_end_span(active_reaction_span);
     }
     active_reaction_span = span;
     active_reaction_pointer = tr->pointer;
     active_reaction_dst_id = tr->dst_id;
-  } else {
-    // Non-reaction events are emitted as single tracepoints; end immediately.
-    otelc_end_span(span);
+
+    if (reaction_fqn) {
+      free(reaction_fqn);
+    }
+
+    if (tid < 0) {
+      lf_platform_mutex_unlock(trace_mutex);
+    }
+    return;
   }
-  
-  // Free allocated memory
-  if (reaction_fqn) {
-    free(reaction_fqn);
-  }
+
+  // Non-reaction event (only emitted if LF_TRACE_VERBOSE=1).
+  const char* event_type_name = get_event_type_name(tr->event_type);
+  void* span = otelc_start_span(tracer, event_type_name, OTELC_SPAN_KIND_INTERNAL, "");
+  set_event_low_cardinality_attributes(span);
+  set_common_high_cardinality_attributes(span, tr);
+  otelc_end_span(span);
 
   if (tid < 0) {
     lf_platform_mutex_unlock(trace_mutex);
