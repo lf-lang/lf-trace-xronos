@@ -35,18 +35,29 @@ add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/third-party/opentelemetry-c)
 
 add_library(lf-trace-impl STATIC)
 add_library(lf::trace-impl ALIAS lf-trace-impl)
-target_link_libraries(lf-trace-impl PRIVATE lf::trace-api)
-target_link_libraries(lf-trace-impl PRIVATE lf::platform-api)
-target_link_libraries(lf-trace-impl PRIVATE lf::logging-api)
-target_link_libraries(lf-trace-impl PRIVATE lf::version-api)
-target_link_libraries(lf-trace-impl PUBLIC opentelemetry-c)
+#
+# NOTE: lf-api targets in this repo are INTERNAL build helpers (header-only interface libs).
+# We avoid exporting them as part of the installable package by using include directories
+# directly for compiling this plugin.
+target_include_directories(lf-trace-impl PRIVATE
+  ${CMAKE_CURRENT_LIST_DIR}/lf-api/trace
+  ${CMAKE_CURRENT_LIST_DIR}/lf-api/trace/types
+  ${CMAKE_CURRENT_LIST_DIR}/lf-api/platform
+  ${CMAKE_CURRENT_LIST_DIR}/lf-api/logging
+  ${CMAKE_CURRENT_LIST_DIR}/lf-api/version
+)
 
-target_sources(lf-trace-impl PUBLIC 
+target_link_libraries(lf-trace-impl PUBLIC opentelemetry-c::opentelemetry-c)
+
+target_sources(lf-trace-impl PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/trace_impl.c
     ${CMAKE_CURRENT_LIST_DIR}/src/otel_backend.c
 )
 
-target_include_directories(lf-trace-impl PUBLIC ${CMAKE_CURRENT_LIST_DIR}/include)
+target_include_directories(lf-trace-impl PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_LIST_DIR}/include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+)
 
 # handle compile-time parameters
 if(NOT DEFINED LOG_LEVEL)
@@ -63,3 +74,52 @@ set_target_properties(lf-trace-impl PROPERTIES SUFFIX ".a")
 set_target_properties(lf-trace-impl PROPERTIES ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/lib")
 set_target_properties(lf-trace-impl PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_LIST_DIR}/lib")
 set_target_properties(lf-trace-impl PROPERTIES ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_LIST_DIR}/lib")
+
+# -----------------------------------------------------------------------------
+# Install + find_package() support (single bundled package)
+# -----------------------------------------------------------------------------
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(TARGETS lf-trace-impl
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/include/"
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# Install opentelemetry-c public headers (trace_impl.c includes opentelemetry_c/opentelemetry_c.h)
+install(DIRECTORY "${CMAKE_CURRENT_LIST_DIR}/third-party/opentelemetry-c/include/"
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+# Copy all transitive static archives we build into the install prefix.
+# This mirrors what build.sh used to do, but via CMake install().
+configure_file(
+  "${CMAKE_CURRENT_LIST_DIR}/cmake/install_deps.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/install_deps.cmake"
+  @ONLY
+)
+install(SCRIPT "${CMAKE_CURRENT_BINARY_DIR}/install_deps.cmake")
+
+# CMake package config: provides imported target lf::trace-impl that links all archives under <prefix>/lib.
+configure_package_config_file(
+  "${CMAKE_CURRENT_LIST_DIR}/cmake/lf-trace-xronosConfig.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/lf-trace-xronosConfig.cmake"
+  INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/lf-trace-xronos"
+)
+
+write_basic_package_version_file(
+  "${CMAKE_CURRENT_BINARY_DIR}/lf-trace-xronosConfigVersion.cmake"
+  VERSION "0.1.0"
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  "${CMAKE_CURRENT_BINARY_DIR}/lf-trace-xronosConfig.cmake"
+  "${CMAKE_CURRENT_BINARY_DIR}/lf-trace-xronosConfigVersion.cmake"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/lf-trace-xronos"
+)

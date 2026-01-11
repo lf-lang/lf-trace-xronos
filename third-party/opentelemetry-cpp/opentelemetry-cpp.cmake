@@ -18,6 +18,10 @@ function(add_opentelemetry)
   set(WITH_DEPRECATED_SDK_FACTORY OFF)
   set(BUILD_TESTING OFF)
   set(BUILD_SHARED_LIBS OFF)
+  # We intentionally bundle static archives into our own install prefix rather than
+  # exporting/installing all opentelemetry-cpp CMake targets (which would also require
+  # exporting/installing gRPC, protobuf, etc.).
+  set(OPENTELEMETRY_INSTALL OFF CACHE BOOL "Install opentelemetry-cpp" FORCE)
   # cloning may take a moment and this shows progress
   set(FETCHCONTENT_QUIET FALSE)
   FetchContent_Declare(

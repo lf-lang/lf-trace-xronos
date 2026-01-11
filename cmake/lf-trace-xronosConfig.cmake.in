@@ -1,0 +1,72 @@
+@PACKAGE_INIT@
+
+# Provide imported target: lf::trace-impl
+#
+# This package intentionally bundles a large set of static archives into <prefix>/lib
+# and links them as raw file paths to avoid requiring every dependency to be separately
+# installed / find_package-able.
+
+if(NOT TARGET lf::trace-impl)
+  add_library(lf::trace-impl STATIC IMPORTED)
+  set_target_properties(lf::trace-impl PROPERTIES
+    IMPORTED_LOCATION "${PACKAGE_PREFIX_DIR}/lib/liblf-trace-impl.a"
+    INTERFACE_INCLUDE_DIRECTORIES "${PACKAGE_PREFIX_DIR}/include"
+  )
+
+  # Link every dependency archive in <prefix>/lib (the plugin itself is the imported target).
+  set(_lf_trace_lib_dir "${PACKAGE_PREFIX_DIR}/lib")
+  file(GLOB _lf_trace_archives "${_lf_trace_lib_dir}/*.a")
+  list(REMOVE_ITEM _lf_trace_archives "${_lf_trace_lib_dir}/liblf-trace-impl.a")
+
+  # System libs
+  find_package(Threads REQUIRED)
+
+  # zlib (needed by gRPC compression support)
+  find_library(_lf_trace_zlib z)
+  set(_lf_trace_link_items ${_lf_trace_archives})
+  if(_lf_trace_zlib)
+    list(APPEND _lf_trace_link_items "${_lf_trace_zlib}")
+  endif()
+
+  # dl (Linux)
+  if(UNIX AND NOT APPLE)
+    list(APPEND _lf_trace_link_items dl)
+  endif()
+
+  # CoreFoundation (macOS; required by Abseil)
+  if(APPLE)
+    find_library(_lf_trace_corefoundation CoreFoundation)
+    if(_lf_trace_corefoundation)
+      list(APPEND _lf_trace_link_items "${_lf_trace_corefoundation}")
+    else()
+      list(APPEND _lf_trace_link_items "-framework CoreFoundation")
+    endif()
+  endif()
+
+  # On GNU ld/lld, group archives to reduce order/cycle issues.
+  if(UNIX AND NOT APPLE)
+    set(_lf_trace_grouped_archives "-Wl,--start-group" ${_lf_trace_archives} "-Wl,--end-group")
+    set(_lf_trace_link_items ${_lf_trace_grouped_archives})
+    if(_lf_trace_zlib)
+      list(APPEND _lf_trace_link_items "${_lf_trace_zlib}")
+    endif()
+    list(APPEND _lf_trace_link_items dl)
+  endif()
+
+  # C++ standard library:
+  # Consumers may be C-only targets, so the linker driver may not automatically add the C++ stdlib.
+  if(APPLE)
+    # libc++ provides std:: symbols; libc++abi provides the C++ ABI/runtime (e.g., __cxa_* and __gxx_personality_v0).
+    list(APPEND _lf_trace_link_items "-lc++" "-lc++abi")
+  elseif(UNIX)
+    list(APPEND _lf_trace_link_items "-lstdc++")
+  endif()
+
+  set_property(TARGET lf::trace-impl APPEND PROPERTY
+    INTERFACE_LINK_LIBRARIES
+      Threads::Threads
+      ${_lf_trace_link_items}
+  )
+endif()
+
+

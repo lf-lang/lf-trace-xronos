@@ -1,7 +1,25 @@
 target C {
     tracing: true, // Turn on tracing.
-    trace-plugin: true, // When set to true, the compiler expects a cmake file that links against the plugin library.
-    cmake-include: ["../../plugin.cmake"], // Relative or absolute path to plugin.cmake.
+    
+    // Option 1: Plugin installed to system path (cleanest)
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+    },
+
+    // Option 2: Plugin installed to a user-specified path
+    // trace-plugin: {
+    //     package: "lf-trace-xronos",
+    //     library: "lf::trace-impl",
+    //     path: "path/to/install/folder", // find_package() searches here.
+    // },
+
+    // Option 3: Fully manual (dev friendly)
+    // cmake-include: ["../../plugin.cmake"], // Relative or absolute path to plugin.cmake.
+    // cmake-args: {
+    //     LF_TRACE_PLUGIN: "lf-trace-xronos",
+    //     LF_TRACE_INSTALL: "../../../install",
+    // }
 }
 
 reactor Sensor {

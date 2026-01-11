@@ -1,0 +1,35 @@
+# Runs at install time (via install(SCRIPT ...)).
+#
+# Copies transitive static archives (built via FetchContent) into the install prefix
+# so that the installed lf-trace-xronos package is self-contained.
+
+set(_dest_lib "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/lib")
+file(MAKE_DIRECTORY "${_dest_lib}")
+
+set(_src_roots
+  "@CMAKE_BINARY_DIR@/_deps/opentelemetry-cpp-build"
+  "@CMAKE_BINARY_DIR@/_deps/grpc-build"
+  "@CMAKE_BINARY_DIR@/_deps/protobuf-build"
+  "@CMAKE_BINARY_DIR@/_deps/absl-build"
+  "@CMAKE_BINARY_DIR@/third-party/opentelemetry-c"
+)
+
+set(_copied 0)
+foreach(_root IN LISTS _src_roots)
+  if(EXISTS "${_root}")
+    file(GLOB_RECURSE _libs "${_root}/*.a")
+    foreach(_lib IN LISTS _libs)
+      get_filename_component(_name "${_lib}" NAME)
+      # Skip the main plugin archive; it is installed via install(TARGETS ...).
+      if(_name STREQUAL "liblf-trace-impl.a")
+        continue()
+      endif()
+      file(INSTALL DESTINATION "${_dest_lib}" TYPE FILE FILES "${_lib}")
+      math(EXPR _copied "${_copied}+1")
+    endforeach()
+  endif()
+endforeach()
+
+message(STATUS "lf-trace-xronos: copied ${_copied} dependency archives into ${_dest_lib}")
+
+
