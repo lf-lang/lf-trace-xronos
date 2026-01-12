@@ -16,32 +16,7 @@ target C {
     timeout: 5s,
 }
 
-reactor Sensor {
-    output out:int
-    timer t(0, 1s)
-    state s:int = 0
-    reaction(t) -> out {=
-        lf_sleep(MSEC(100));
-        lf_set(out, self->s++);    
-    =}
-}
-
-reactor Processing {
-    input in:int
-    output out:int
-    reaction(in) -> out {=
-        lf_sleep(MSEC(200));
-        lf_set(out, in->value * -2);
-    =}
-}
-
-reactor Actuator {
-    input in:int 
-    reaction(in) {=
-        lf_sleep(MSEC(300));
-        printf("Received %d\n", in->value);
-    =}
-}
+import Sensor, Processing, Actuator from "./Lib.lf"
 
 main reactor {
     s = new Sensor()
