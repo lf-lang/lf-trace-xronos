@@ -1,0 +1,52 @@
+/**
+ * This test shows the most developer-friendly approach
+ * to get the trace plugin working.
+ * This approach is NOT for a regular LF user because
+ * setting cmake arguments can be confusing.
+ * To run this test successfully,
+ * install lf-trace-xronos on the system path.
+ */
+target C {
+    tracing: true, // Turn on tracing.
+    cmake-include: ["../../plugin.cmake"],      // Relative to this LF file.
+    cmake-args: {
+        LF_TRACE_PLUGIN: "lf-trace-xronos",
+        LF_TRACE_INSTALL: "../../../install",   // Relative to the generated C project directory
+    },
+    timeout: 5s,
+}
+
+reactor Sensor {
+    output out:int
+    timer t(0, 1s)
+    state s:int = 0
+    reaction(t) -> out {=
+        lf_sleep(MSEC(100));
+        lf_set(out, self->s++);    
+    =}
+}
+
+reactor Processing {
+    input in:int
+    output out:int
+    reaction(in) -> out {=
+        lf_sleep(MSEC(200));
+        lf_set(out, in->value * -2);
+    =}
+}
+
+reactor Actuator {
+    input in:int 
+    reaction(in) {=
+        lf_sleep(MSEC(300));
+        printf("Received %d\n", in->value);
+    =}
+}
+
+main reactor {
+    s = new Sensor()
+    p = new Processing()
+    a = new Actuator()
+    s.out -> p.in
+    p.out -> a.in
+}

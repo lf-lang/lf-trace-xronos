@@ -1,25 +1,17 @@
+/**
+ * This test shows the best approach for the user who
+ * prefers a clean installation that can be easily removed later.
+ * To run this test successfully,
+ * install lf-trace-xronos on the system path.
+ */
 target C {
     tracing: true, // Turn on tracing.
-    
-    // Option 1: Plugin installed to system path (cleanest)
     trace-plugin: {
         package: "lf-trace-xronos",
         library: "lf::trace-impl",
+        path: "../../install/", // Relative to this LF file's location
     },
-
-    // Option 2: Plugin installed to a user-specified path
-    // trace-plugin: {
-    //     package: "lf-trace-xronos",
-    //     library: "lf::trace-impl",
-    //     path: "path/to/install/folder", // find_package() searches here.
-    // },
-
-    // Option 3: Fully manual (dev friendly)
-    // cmake-include: ["../../plugin.cmake"], // Relative or absolute path to plugin.cmake.
-    // cmake-args: {
-    //     LF_TRACE_PLUGIN: "lf-trace-xronos",
-    //     LF_TRACE_INSTALL: "../../../install",
-    // }
+    timeout: 5s,
 }
 
 reactor Sensor {
