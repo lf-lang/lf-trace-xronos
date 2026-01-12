@@ -10,7 +10,7 @@ target C {
     tracing: true, // Turn on tracing.
     cmake-include: ["../../plugin.cmake"],      // Relative to this LF file.
     cmake-args: {
-        LF_TRACE_PLUGIN: "lf-trace-xronos",
+        LF_TRACE_PLUGIN: "lf-trace-xronos",     // This cmake variable cannot be empty, otherwise the default trace impl will be used.
         LF_TRACE_INSTALL: "../../../install",   // Relative to the generated C project directory
     },
     timeout: 5s,
