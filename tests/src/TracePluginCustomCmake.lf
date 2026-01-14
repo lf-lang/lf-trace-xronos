@@ -16,7 +16,7 @@ target C {
     timeout: 5s,
 }
 
-import Sensor, Processing, Actuator from "./Lib.lf"
+import Sensor, Processing, Actuator from "lib/Components.lf"
 
 main reactor {
     s = new Sensor()

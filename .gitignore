@@ -1,6 +1,6 @@
-build/
-lib/
-install/
+/build/
+/lib/
+/install/
 tests/bin/
 tests/src-gen/
-tests/include
+tests/include/
