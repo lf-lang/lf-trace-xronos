@@ -1,0 +1,168 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  LOG_LEVEL: 4
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      #===========================================
+      # Checkout
+      #===========================================
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      #===========================================
+      # Install Java for lfc-dev
+      #===========================================
+      - name: Install Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      #===========================================
+      # Install system dependencies
+      #===========================================
+      - name: Install system dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential zlib1g-dev
+
+      - name: Install system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install cmake
+
+      #===========================================
+      # Build lfc-dev from lingua-franca master
+      #===========================================
+      - name: Cache Gradle dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-lfc
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Cache lingua-franca repository
+        id: lfc-repo-cache
+        uses: actions/cache@v4
+        with:
+          path: lingua-franca
+          key: lfc-repo-${{ runner.os }}-master-${{ github.run_id }}
+          restore-keys: |
+            lfc-repo-${{ runner.os }}-master-
+
+      - name: Clone lingua-franca
+        run: |
+          if [ ! -d "lingua-franca" ]; then
+            git clone --depth 1 https://github.com/lf-lang/lingua-franca.git
+          fi
+
+      - name: Update and build lfc-dev
+        run: |
+          cd lingua-franca
+          git fetch origin master --depth 1
+          git checkout FETCH_HEAD
+          ./gradlew :cli:lfc-dev:assemble -x test
+
+      - name: Add lfc-dev to PATH
+        run: |
+          echo "${{ github.workspace }}/lingua-franca/org.lflang.cli/build/install/lfc-dev/bin" >> $GITHUB_PATH
+
+      - name: Verify lfc-dev installation
+        run: lfc-dev --version
+
+      #===========================================
+      # Build the trace plugin
+      #===========================================
+      - name: Cache plugin build dependencies
+        uses: actions/cache@v4
+        with:
+          path: build/_deps
+          key: plugin-deps-${{ runner.os }}-${{ hashFiles('CMakeLists.txt', 'third-party/**/*.cmake', '.gitmodules') }}
+          restore-keys: |
+            plugin-deps-${{ runner.os }}-
+
+      - name: Build plugin
+        run: ./build.sh --log-level ${{ env.LOG_LEVEL }}
+
+      #===========================================
+      # Install plugin to repo root ./install/
+      # (for TracePluginUserPath.lf and TracePluginCustomCmake.lf)
+      #===========================================
+      - name: Install plugin to ./install/
+        run: cmake --install build --prefix "${{ github.workspace }}/install"
+
+      - name: Verify ./install/ contents
+        run: |
+          ls -la "${{ github.workspace }}/install/"
+          ls -la "${{ github.workspace }}/install/lib/" | head -20
+
+      #===========================================
+      # Install plugin to system path
+      # (for TracePluginSystemPath.lf)
+      #===========================================
+      - name: Install plugin to system path (Linux)
+        if: runner.os == 'Linux'
+        run: sudo cmake --install build
+
+      - name: Install plugin to system path (macOS)
+        if: runner.os == 'macOS'
+        run: cmake --install build
+
+      - name: Verify system installation
+        run: |
+          ls -la /usr/local/lib/cmake/lf-trace-xronos/ || echo "CMake config not found at /usr/local"
+          ls /usr/local/lib/liblf-trace-impl.a || echo "Library not found at /usr/local"
+
+      #===========================================
+      # Test 1: TracePluginSystemPath.lf
+      # Uses system-installed plugin (no path specified)
+      #===========================================
+      - name: Compile TracePluginSystemPath.lf
+        run: lfc-dev tests/src/TracePluginSystemPath.lf
+
+      - name: Run TracePluginSystemPath
+        run: ./tests/bin/TracePluginSystemPath
+        timeout-minutes: 2
+
+      #===========================================
+      # Test 2: TracePluginUserPath.lf
+      # Uses path: "../../install/" relative to .lf file
+      #===========================================
+      - name: Compile TracePluginUserPath.lf
+        run: lfc-dev tests/src/TracePluginUserPath.lf
+
+      - name: Run TracePluginUserPath
+        run: ./tests/bin/TracePluginUserPath
+        timeout-minutes: 2
+
+      #===========================================
+      # Test 3: TracePluginCustomCmake.lf
+      # Uses cmake-include with plugin.cmake
+      #===========================================
+      - name: Compile TracePluginCustomCmake.lf
+        run: lfc-dev tests/src/TracePluginCustomCmake.lf
+
+      - name: Run TracePluginCustomCmake
+        run: ./tests/bin/TracePluginCustomCmake
+        timeout-minutes: 2
