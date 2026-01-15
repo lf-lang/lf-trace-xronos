@@ -27,7 +27,7 @@ jobs:
           submodules: recursive
 
       #===========================================
-      # Install Java for lfc-dev
+      # Install Java for lfc
       #===========================================
       - name: Install Java 17
         uses: actions/setup-java@v4
@@ -50,7 +50,7 @@ jobs:
           brew install cmake
 
       #===========================================
-      # Build lfc-dev from lingua-franca master
+      # Build lfc from lingua-franca master
       #===========================================
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -77,19 +77,19 @@ jobs:
             git clone --depth 1 https://github.com/lf-lang/lingua-franca.git
           fi
 
-      - name: Update and build lfc-dev
+      - name: Update and build lfc
         run: |
           cd lingua-franca
           git fetch origin master --depth 1
           git checkout FETCH_HEAD
-          ./gradlew :cli:lfc-dev:assemble -x test
+          ./gradlew assemble
 
-      - name: Add lfc-dev to PATH
+      - name: Add lfc to PATH
         run: |
-          echo "${{ github.workspace }}/lingua-franca/org.lflang.cli/build/install/lfc-dev/bin" >> $GITHUB_PATH
+          echo "${{ github.workspace }}/lingua-franca/build/install/lf-cli/bin" >> $GITHUB_PATH
 
-      - name: Verify lfc-dev installation
-        run: lfc-dev --version
+      - name: Verify lfc installation
+        run: lfc --version
 
       #===========================================
       # Build the trace plugin
@@ -139,7 +139,7 @@ jobs:
       # Uses system-installed plugin (no path specified)
       #===========================================
       - name: Compile TracePluginSystemPath.lf
-        run: lfc-dev tests/src/TracePluginSystemPath.lf
+        run: lfc tests/src/TracePluginSystemPath.lf
 
       - name: Run TracePluginSystemPath
         run: ./tests/bin/TracePluginSystemPath
@@ -150,7 +150,7 @@ jobs:
       # Uses path: "../../install/" relative to .lf file
       #===========================================
       - name: Compile TracePluginUserPath.lf
-        run: lfc-dev tests/src/TracePluginUserPath.lf
+        run: lfc tests/src/TracePluginUserPath.lf
 
       - name: Run TracePluginUserPath
         run: ./tests/bin/TracePluginUserPath
@@ -161,7 +161,7 @@ jobs:
       # Uses cmake-include with plugin.cmake
       #===========================================
       - name: Compile TracePluginCustomCmake.lf
-        run: lfc-dev tests/src/TracePluginCustomCmake.lf
+        run: lfc tests/src/TracePluginCustomCmake.lf
 
       - name: Run TracePluginCustomCmake
         run: ./tests/bin/TracePluginCustomCmake
