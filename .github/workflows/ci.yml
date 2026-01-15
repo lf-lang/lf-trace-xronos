@@ -50,7 +50,7 @@ jobs:
           brew install cmake
 
       #===========================================
-      # Build lfc from lingua-franca master
+      # Build lfc from lingua-franca live-tracing2
       #===========================================
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -67,9 +67,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: lingua-franca
-          key: lfc-repo-${{ runner.os }}-master-${{ github.run_id }}
+          key: lfc-repo-${{ runner.os }}-live-tracing2-${{ github.run_id }}
           restore-keys: |
-            lfc-repo-${{ runner.os }}-master-
+            lfc-repo-${{ runner.os }}-live-tracing2-
 
       - name: Clone lingua-franca
         run: |
@@ -80,7 +80,7 @@ jobs:
       - name: Update and build lfc
         run: |
           cd lingua-franca
-          git fetch origin master --depth 1
+          git fetch origin live-tracing2 --depth 1
           git checkout FETCH_HEAD
           ./gradlew assemble
 
