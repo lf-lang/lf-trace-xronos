@@ -47,12 +47,11 @@ jobs:
       - name: Install system dependencies (macOS)
         if: runner.os == 'macOS'
         run: |
-          pip3 install cmake --upgrade
-          echo "$(python3 -m site --user-base)/bin" >> $GITHUB_PATH
-
-      - name: Verify cmake version (macOS)
-        if: runner.os == 'macOS'
-        run: |
+          cmake --version
+          # Upgrade if version < 3.28
+          if ! cmake --version | grep -qE "3\.(2[89]|[3-9][0-9])"; then
+            brew install cmake || brew upgrade cmake
+          fi
           cmake --version
 
       #===========================================
