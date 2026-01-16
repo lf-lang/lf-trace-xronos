@@ -38,21 +38,21 @@ jobs:
       #===========================================
       # Install system dependencies
       #===========================================
+      - name: Setup CMake 3.28+
+        uses: jwlawson/actions-setup-cmake@v2
+        with:
+          cmake-version: '3.28'
+
       - name: Install system dependencies (Ubuntu)
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake build-essential zlib1g-dev
+          sudo apt-get install -y build-essential zlib1g-dev
+          cmake --version
 
-      - name: Install system dependencies (macOS)
+      - name: Verify cmake (macOS)
         if: runner.os == 'macOS'
-        run: |
-          cmake --version
-          # Upgrade if version < 3.28
-          if ! cmake --version | grep -qE "3\.(2[89]|[3-9][0-9])"; then
-            brew install cmake || brew upgrade cmake
-          fi
-          cmake --version
+        run: cmake --version
 
       #===========================================
       # Build lfc from lingua-franca live-tracing2
