@@ -79,14 +79,15 @@ jobs:
       - name: Clone lingua-franca
         run: |
           if [ ! -d "lingua-franca" ]; then
-            git clone --depth 1 https://github.com/lf-lang/lingua-franca.git
+            git clone https://github.com/lf-lang/lingua-franca.git
           fi
 
       - name: Update and build lfc
         run: |
           cd lingua-franca
-          git fetch origin live-tracing2 --depth 1
+          git fetch origin live-tracing2
           git checkout FETCH_HEAD
+          git submodule update --init --recursive
           ./gradlew assemble
 
       - name: Add lfc to PATH
@@ -133,7 +134,7 @@ jobs:
         run: |
           ./build.sh --log-level ${{ env.LOG_LEVEL }} --clean
           ./build.sh --log-level ${{ env.LOG_LEVEL }}
-          ./build.sh --install
+          sudo ./build.sh --install
 
       - name: Verify system installation
         run: |
