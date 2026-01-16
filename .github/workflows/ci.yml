@@ -104,15 +104,10 @@ jobs:
           restore-keys: |
             plugin-deps-${{ runner.os }}-
 
-      - name: Build plugin
-        run: ./build.sh --log-level ${{ env.LOG_LEVEL }}
-
-      #===========================================
-      # Install plugin to repo root ./install/
-      # (for TracePluginUserPath.lf and TracePluginCustomCmake.lf)
-      #===========================================
-      - name: Install plugin to ./install/
-        run: cmake --install build --prefix "${{ github.workspace }}/install"
+      - name: Build and install plugin to ./install/
+        run: |
+          ./build.sh --log-level ${{ env.LOG_LEVEL }} --prefix "${{ github.workspace }}/install"
+          ./build.sh --install
 
       - name: Verify ./install/ contents
         run: |
@@ -123,13 +118,19 @@ jobs:
       # Install plugin to system path
       # (for TracePluginSystemPath.lf)
       #===========================================
-      - name: Install plugin to system path (Linux)
+      - name: Build and install plugin to system path (Linux)
         if: runner.os == 'Linux'
-        run: sudo cmake --install build
+        run: |
+          ./build.sh --log-level ${{ env.LOG_LEVEL }} --clean
+          ./build.sh --log-level ${{ env.LOG_LEVEL }}
+          sudo ./build.sh --install
 
-      - name: Install plugin to system path (macOS)
+      - name: Build and install plugin to system path (macOS)
         if: runner.os == 'macOS'
-        run: cmake --install build
+        run: |
+          ./build.sh --log-level ${{ env.LOG_LEVEL }} --clean
+          ./build.sh --log-level ${{ env.LOG_LEVEL }}
+          ./build.sh --install
 
       - name: Verify system installation
         run: |
