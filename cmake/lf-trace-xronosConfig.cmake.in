@@ -60,6 +60,8 @@ if(NOT TARGET lf::trace-impl)
     list(APPEND _lf_trace_link_items "-lc++" "-lc++abi")
   elseif(UNIX)
     list(APPEND _lf_trace_link_items "-lstdc++")
+    # Math library (gRPC uses lround, etc.)
+    list(APPEND _lf_trace_link_items "-lm")
   endif()
 
   set_property(TARGET lf::trace-impl APPEND PROPERTY
