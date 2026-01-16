@@ -32,6 +32,9 @@ function(add_grpc)
   set(gRPC_PROTOBUF_PROVIDER "package" CACHE STRING "" FORCE)
   set(gRPC_ZLIB_PROVIDER "package" CACHE STRING "" FORCE)
 
+  # Disable c-ares tools (ahost, adig, acountry) - not needed and causes install errors
+  set(CARES_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+
   FetchContent_Declare(
     gRPC
     GIT_REPOSITORY https://github.com/grpc/grpc
