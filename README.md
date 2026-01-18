@@ -1,4 +1,4 @@
-# lf-trace-xronos
+# LF Trace Plugin for the Xronos Dashboard
 
 An LF trace plugin for displaying live traces on the Xronos Dashboard using OpenTelemetry.
 
@@ -8,54 +8,105 @@ This plugin provides OpenTelemetry tracing support for Lingua Franca programs. I
 
 ## Building the Plugin
 
-### Step 1: Build the plugin and create install directory
+### Step 1: Build (choose one)
 
-Run the build script:
+`build.sh` is a thin wrapper around CMake. Step 1 **configures + builds** (it does not install). Choose one:
+
+#### 1a) Configure/build for the system prefix (default CMake prefix)
 
 ```bash
 ./build.sh
 ```
 
-This will:
-- Build `lib/liblf-trace-impl.a` and all dependencies
-- Create an `install/` directory containing:
-  - `install/include/` - All required headers
-  - `install/lib/` - All static libraries (113+ archives including OpenTelemetry, gRPC, Protobuf, Abseil, etc.)
+This produces:
+- `lib/liblf-trace-impl.a`
+- A build directory with cached dependencies under `build/_deps/`
 
-The install directory is created at `./install` by default. You can specify a custom location:
+#### 1b) Configure/build for a user-chosen prefix (install anywhere you like)
+
+Choose any `PREFIX` directory you want. Installation will populate:
+- `<PREFIX>/include`
+- `<PREFIX>/lib`
+- `<PREFIX>/lib/cmake/lf-trace-xronos`
+
+Example (configure/build for this repo’s `./install` directory; this is what CI uses):
 
 ```bash
-./build.sh --install /custom/path/to/install
+./build.sh --prefix "$(pwd)/install"
 ```
+
+### Step 2: Install
+
+Installing is a separate step (required to use the plugin from LF). Run this after Step 1:
+
+```bash
+./build.sh --install
+```
+
+(Use `sudo` only if your chosen prefix requires it.)
 
 **Note:** Dependencies are cached in `build/_deps/` and won't be re-downloaded on subsequent builds unless you delete that directory.
 
-### Step 2: Use the plugin in your LF program
+## Step 3: Using the Plugin from Lingua Franca (three supported flows)
 
-Set the install directory via environment variable and include `plugin.cmake`:
+- If you chose **1a (system prefix)**, use **3a**.
+- If you chose **1b (user-chosen prefix)**, use **3b** or **3c**.
 
-```bash
-export LF_TRACE_INSTALL=/abs/path/to/lf-trace-xronos/install
-lfc-dev -c MyProgram.lf --tracing
-```
+### 3a) System package on default CMake search path (cleanest LF file)
 
-In your LF file:
+Install the plugin to the system prefix (see above), then in your `.lf`:
 
 ```lf
 target C {
-  tracing: true,
-  trace-plugin: true,
-  cmake-include: ["/abs/path/to/lf-trace-xronos/plugin.cmake"],
+  tracing: true, // Turn on tracing.
+  trace-plugin: {
+    package: "lf-trace-xronos",
+    library: "lf::trace-impl",
+  },
 }
 ```
 
-## What plugin.cmake Does
+See a working example in `tests/src/TracePluginSystemPath.lf`.
 
-The `plugin.cmake` file automatically:
-- Links all required static libraries from the install directory
-- Adds include directories for headers
-- Links system libraries (zlib, pthread, C++ standard library, CoreFoundation on macOS, c-ares)
-- Sets appropriate C++ standard (C++14)
+### 3b) Package + explicit path (no system install; easy to remove)
+
+Install the plugin to a user-chosen prefix (Step 1b + Step 2), then in your `.lf` set `path` to that prefix.
+
+Example (install prefix is this repo’s `./install`, referenced relative to the `.lf` file):
+
+```lf
+target C {
+  tracing: true, // Turn on tracing.
+  trace-plugin: {
+    package: "lf-trace-xronos",
+    library: "lf::trace-impl",
+    path: "../../install/", // Relative to this LF file's location
+  },
+}
+```
+
+See a working example in `tests/src/TracePluginUserPath.lf`.
+
+### 3c) Custom CMake integration (most flexible; dev-focused)
+
+Use `plugin.cmake` to link everything from an install directory and pass `LF_TRACE_INSTALL` (set to the Step 1b install prefix):
+
+```lf
+target C {
+  tracing: true, // Turn on tracing.
+  cmake-include: ["../../plugin.cmake"], // Relative to this LF file.
+  cmake-args: {
+    LF_TRACE_PLUGIN: "lf-trace-xronos",
+    LF_TRACE_INSTALL: "../../../install", // Relative to the generated C project directory
+  },
+}
+```
+
+See a working example in `tests/src/TracePluginCustomCmake.lf`.
+
+## End-to-end CI reference
+
+For a complete working sequence (build lfc, install plugin both to `./install` and to system prefix, then compile+run the LF programs), see `.github/workflows/ci.yml`.
 
 ## Dependencies
 
@@ -75,12 +126,13 @@ All dependencies are built as static libraries and included in the `install/` di
 The `build.sh` script supports several options:
 
 ```bash
-./build.sh [--log-level <n>] [--install <install-dir>] [--no-clean]
+./build.sh [--log-level <n>] [--prefix <prefix>] [--install] [--clean]
 ```
 
 - `--log-level <n>`: Set the log level (default: 4)
-- `--install <install-dir>`: Specify custom install directory (default: `./install`)
-- `--no-clean`: Skip cleaning CMake cache (faster for incremental builds)
+- `--prefix <prefix>`: Set `CMAKE_INSTALL_PREFIX` for the build (used by `--install`)
+- `--install`: Install to the configured prefix
+- `--clean`: Clear top-level CMake cache files (keeps `build/_deps/`)
 
 ## Troubleshooting
 
@@ -107,7 +159,7 @@ The plugin uses a two-stage build process:
 
 1. **Plugin build stage** (`./build.sh`):
    - Builds the plugin library and all dependencies
-   - Copies headers and libraries to `install/` directory
+   - Optionally installs headers, libraries, and CMake config via `./build.sh --install`
    - Dependencies are cached in `build/_deps/` for reuse
 
 2. **LF program build stage** (`plugin.cmake`):
