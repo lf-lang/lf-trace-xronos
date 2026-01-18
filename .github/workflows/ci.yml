@@ -5,12 +5,29 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
-  # Enable workflow_dispatch so that this CI workflow can be triggered by 
-  # the lingua-franca CI workflows.
   workflow_dispatch:
+    inputs:
+      lf-ref:
+        description: 'Git ref of lingua-franca to use'
+        required: false
+        default: 'live-tracing2'
+  # Reusable workflow - can be called by other repos (e.g., lingua-franca)
+  workflow_call:
+    inputs:
+      lf-ref:
+        description: 'Git ref of lingua-franca to use'
+        required: false
+        type: string
+        default: 'live-tracing2'
+      lf-trace-xronos-ref:
+        description: 'Git ref of lf-trace-xronos to checkout'
+        required: false
+        type: string
+        default: 'main'
 
 env:
   LOG_LEVEL: 4
+  LF_REF: ${{ inputs.lf-ref || 'live-tracing2' }}
 
 jobs:
   test:
@@ -27,6 +44,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
+          repository: lf-lang/lf-trace-xronos
+          ref: ${{ inputs.lf-trace-xronos-ref || github.ref }}
           submodules: recursive
 
       #===========================================
@@ -58,7 +77,7 @@ jobs:
         run: cmake --version
 
       #===========================================
-      # Build lfc from lingua-franca live-tracing2
+      # Build lfc from lingua-franca
       #===========================================
       - name: Cache Gradle dependencies
         uses: actions/cache@v4
@@ -75,9 +94,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: lingua-franca
-          key: lfc-repo-${{ runner.os }}-live-tracing2-${{ github.run_id }}
+          key: lfc-repo-${{ runner.os }}-${{ env.LF_REF }}-${{ github.run_id }}
           restore-keys: |
-            lfc-repo-${{ runner.os }}-live-tracing2-
+            lfc-repo-${{ runner.os }}-${{ env.LF_REF }}-
 
       - name: Clone lingua-franca
         run: |
@@ -88,7 +107,7 @@ jobs:
       - name: Update and build lfc
         run: |
           cd lingua-franca
-          git fetch origin live-tracing2
+          git fetch origin ${{ env.LF_REF }}
           git checkout FETCH_HEAD
           git submodule update --init --recursive
           ./gradlew assemble
