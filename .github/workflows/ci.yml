@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  # Enable workflow_dispatch so that this CI workflow can be triggered by 
+  # the lingua-franca CI workflows.
+  workflow_dispatch:
 
 env:
   LOG_LEVEL: 4
