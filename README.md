@@ -1,5 +1,7 @@
 # LF Trace Plugin for the Xronos Dashboard
 
+![Demo dashboard screenshot](img/demo.png)
+
 An LF trace plugin for displaying live traces on the Xronos Dashboard using OpenTelemetry.
 
 ## Overview
