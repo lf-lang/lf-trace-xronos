@@ -6,9 +6,10 @@
  */
 target C {
     tracing: true, // Turn on tracing.
-    trace-plugin: {
-        package: "lf-trace-xronos",
-        library: "lf::trace-impl",
+    trace-plugin: true,
+    cmake-args: {
+        LF_TRACE_PLUGIN: "lf-trace-xronos",
+        LF_TRACE_PLUGIN_LIBRARY: "lf::trace-impl",
     },
     timeout: 5s,
 }
