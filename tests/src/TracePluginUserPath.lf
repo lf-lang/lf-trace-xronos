@@ -6,12 +6,7 @@
  */
 target C {
     tracing: true, // Turn on tracing.
-    trace-plugin: true,
-    cmake-args: {
-        LF_TRACE_PLUGIN: "lf-trace-xronos",
-        LF_TRACE_PLUGIN_LIBRARY: "lf::trace-impl",
-        LF_TRACE_PLUGIN_PATHS: "../../../install", // Relative to the generated C project directory
-    },
+    cmake-include: ["trace-userpath.cmake"],
     timeout: 5s,
 }
 
