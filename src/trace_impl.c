@@ -1,4 +1,4 @@
-#include <stdio.h> // debugging only
+#include <stdio.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,9 +60,6 @@ static version_t version = {.build_config =
 
 // PRIVATE HELPERS ***********************************************************
 
-// Forward declaration (used by helper functions below).
-static char* build_low_cardinality_attributes_list(int has_description, int has_container_fqn);
-
 /**
  * @brief Set common high-cardinality attributes on a span.
  *
@@ -74,7 +71,7 @@ static void set_common_high_cardinality_attributes(void* span, const trace_recor
   }
   void* map = otelc_create_attr_map();
   otelc_set_int64_t_attr(map, "xronos.timestamp", tr->logical_time);
-  otelc_set_int64_t_attr(map, "xronos.microstep", tr->microstep);
+  otelc_set_uint32_t_attr(map, "xronos.microstep", (uint32_t)tr->microstep);
   otelc_set_int64_t_attr(map, "xronos.lag", tr->physical_time - tr->logical_time);
   otelc_set_span_attrs(span, map);
   otelc_destroy_attr_map(map);
@@ -87,13 +84,38 @@ static void set_low_cardinality_schema_attr(void* map, int has_description, int 
   if (!map) {
     return;
   }
-  char* low_card_attrs_list = build_low_cardinality_attributes_list(has_description, has_container_fqn);
-  if (low_card_attrs_list) {
-    otelc_set_bytes_attr(map, "xronos.schema.low_cardinality_attributes",
-                         (const uint8_t*)low_card_attrs_list,
-                         strlen(low_card_attrs_list));
-    free(low_card_attrs_list);
+
+  static const char* kLowCardBase[] = {
+      "xronos.element_type",
+  };
+  static const char* kLowCardWithDescNoContainer[] = {
+      "xronos.element_type",
+      "xronos.fqn",
+      "xronos.name",
+  };
+  static const char* kLowCardWithDescWithContainer[] = {
+      "xronos.element_type",
+      "xronos.fqn",
+      "xronos.name",
+      "xronos.container_fqn",
+  };
+
+  const char* const* values = kLowCardBase;
+  size_t count = sizeof(kLowCardBase) / sizeof(kLowCardBase[0]);
+  if (has_description) {
+    if (has_container_fqn) {
+      values = kLowCardWithDescWithContainer;
+      count = sizeof(kLowCardWithDescWithContainer) / sizeof(kLowCardWithDescWithContainer[0]);
+    } else {
+      values = kLowCardWithDescNoContainer;
+      count = sizeof(kLowCardWithDescNoContainer) / sizeof(kLowCardWithDescNoContainer[0]);
+    }
   }
+
+  otelc_set_span_of_string_view_attr(map,
+                                     "xronos.schema.low_cardinality_attributes",
+                                     values,
+                                     count);
 }
 
 /**
@@ -136,29 +158,29 @@ static void set_reaction_low_cardinality_attributes(void* span,
   void* map = otelc_create_attr_map();
 
   const char* element_type_value = "reaction";
-  otelc_set_bytes_attr(map, "xronos.element_type",
-                       (const uint8_t*)element_type_value,
-                       strlen(element_type_value));
+  otelc_set_string_view_attr(map, "xronos.element_type",
+                             element_type_value,
+                             strlen(element_type_value));
 
   // We only set xronos.fqn/xronos.name/xronos.container_fqn if we have a reaction_fqn.
   const int has_description = (reaction_fqn != NULL);
   int has_container_fqn = 0;
 
   if (reaction_fqn) {
-    otelc_set_bytes_attr(map, "xronos.fqn",
-                         (const uint8_t*)reaction_fqn,
-                         strlen(reaction_fqn));
+    otelc_set_string_view_attr(map, "xronos.fqn",
+                               reaction_fqn,
+                               strlen(reaction_fqn));
 
     char reaction_name_str[32];
     snprintf(reaction_name_str, sizeof(reaction_name_str), "%d", reaction_number);
-    otelc_set_bytes_attr(map, "xronos.name",
-                         (const uint8_t*)reaction_name_str,
-                         strlen(reaction_name_str));
+    otelc_set_string_view_attr(map, "xronos.name",
+                               reaction_name_str,
+                               strlen(reaction_name_str));
 
     if (reactor_fqn && reactor_fqn[0] != '\0') {
-      otelc_set_bytes_attr(map, "xronos.container_fqn",
-                           (const uint8_t*)reactor_fqn,
-                           strlen(reactor_fqn));
+      otelc_set_string_view_attr(map, "xronos.container_fqn",
+                                 reactor_fqn,
+                                 strlen(reactor_fqn));
       has_container_fqn = 1;
     }
   }
@@ -179,9 +201,9 @@ static void set_event_low_cardinality_attributes(void* span) {
 
   void* map = otelc_create_attr_map();
   const char* element_type_value = "trace_event";
-  otelc_set_bytes_attr(map, "xronos.element_type",
-                       (const uint8_t*)element_type_value,
-                       strlen(element_type_value));
+  otelc_set_string_view_attr(map, "xronos.element_type",
+                             element_type_value,
+                             strlen(element_type_value));
   // Only element_type is set.
   set_low_cardinality_schema_attr(map, 0, 0);
   otelc_set_span_attrs(span, map);
@@ -229,57 +251,6 @@ static const char* get_event_type_name(int event_type) {
   }
   
   return "Unknown event";
-}
-
-/**
- * @brief Build a comma-separated string of low cardinality attribute names
- * 
- * Creates a string listing all low cardinality attributes.
- * 
- * Examples:
- * - When has_description = 0: "xronos.element_type"
- * - When has_description = 1: "xronos.element_type,xronos.fqn,xronos.name,xronos.container_fqn"
- * 
- * Note: This list does NOT include xronos.schema.low_cardinality_attributes itself
- * 
- * @param has_description Whether description field is available (non-NULL and non-empty)
- * @param has_container_fqn Whether container_fqn was extracted (FQN contains '.')
- * @return Comma-separated string (caller must free) or NULL on failure
- */
-static char* build_low_cardinality_attributes_list(int has_description, int has_container_fqn) {
-  // Base attributes always present
-  const char* base_attrs = "xronos.element_type";
-  
-  if (!has_description) {
-    // Only element_type when no description
-    char* result = malloc(strlen(base_attrs) + 1);
-    if (!result) {
-      return NULL;
-    }
-    strcpy(result, base_attrs);
-    return result;
-  }
-  
-  // With description, include fqn, name, and optionally container_fqn
-  size_t total_len = strlen(base_attrs) + strlen(",xronos.fqn,xronos.name");
-  if (has_container_fqn) {
-    total_len += strlen(",xronos.container_fqn");
-  }
-  total_len += 1; // null terminator
-  
-  char* result = malloc(total_len);
-  if (!result) {
-    return NULL;
-  }
-  
-  strcpy(result, base_attrs);
-  strcat(result, ",xronos.fqn");
-  strcat(result, ",xronos.name");
-  if (has_container_fqn) {
-    strcat(result, ",xronos.container_fqn");
-  }
-  
-  return result;
 }
 
 // IMPLEMENTATION OF VERSION API *********************************************
