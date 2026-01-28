@@ -10,7 +10,7 @@ on:
       lf-ref:
         description: 'Git ref of lingua-franca to use'
         required: false
-        default: 'live-tracing'
+        default: 'master'
   # Reusable workflow - can be called by other repos (e.g., lingua-franca)
   workflow_call:
     inputs:
@@ -18,7 +18,7 @@ on:
         description: 'Git ref of lingua-franca to use'
         required: false
         type: string
-        default: 'live-tracing'
+        default: 'master'
       lf-trace-xronos-ref:
         description: 'Git ref of lf-trace-xronos to checkout'
         required: false
@@ -27,7 +27,7 @@ on:
 
 env:
   LOG_LEVEL: 4
-  LF_REF: ${{ inputs.lf-ref || 'live-tracing' }}
+  LF_REF: ${{ inputs.lf-ref || 'master' }}
 
 jobs:
   test:
