@@ -191,6 +191,8 @@ jobs:
       #===========================================
       - name: Compile TracePluginCustomCmake.lf
         run: lfc tests/src/TracePluginCustomCmake.lf
+        env:
+          LF_TRACE_INSTALL: ${{ github.workspace }}/install
 
       - name: Run TracePluginCustomCmake
         run: ./tests/bin/TracePluginCustomCmake
