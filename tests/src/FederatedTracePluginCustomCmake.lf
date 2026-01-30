@@ -1,18 +1,13 @@
 /**
- * This test shows the most developer-friendly approach
- * to get the trace plugin working.
- * This approach is NOT for a regular LF user because
- * setting cmake arguments can be confusing.
+ * Federated version of TracePluginCustomCmake.
+ * Uses a cmake-include wrapper that searches upward for plugin.cmake,
+ * making it robust to the deeper directory nesting of federated builds.
  * To run this test successfully,
- * install lf-trace-xronos on the system path.
+ * build lf-trace-xronos with ./build.sh first.
  */
 target C {
     tracing: true, // Turn on tracing.
-    cmake-include: ["../../plugin.cmake"],      // Relative to this LF file.
-    cmake-args: {
-        LF_TRACE_PLUGIN: "lf-trace-xronos",     // This cmake variable cannot be empty, otherwise the default trace impl will be used.
-        LF_TRACE_INSTALL: "../../../install",   // Relative to the generated C project directory
-    },
+    cmake-include: ["trace-fedcustomcmake.cmake"],  // Relative to this LF file.
     timeout: 5s,
 }
 
