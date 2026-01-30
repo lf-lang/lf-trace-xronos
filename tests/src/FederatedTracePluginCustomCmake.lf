@@ -1,0 +1,27 @@
+/**
+ * This test shows the most developer-friendly approach
+ * to get the trace plugin working.
+ * This approach is NOT for a regular LF user because
+ * setting cmake arguments can be confusing.
+ * To run this test successfully,
+ * install lf-trace-xronos on the system path.
+ */
+target C {
+    tracing: true, // Turn on tracing.
+    cmake-include: ["../../plugin.cmake"],      // Relative to this LF file.
+    cmake-args: {
+        LF_TRACE_PLUGIN: "lf-trace-xronos",     // This cmake variable cannot be empty, otherwise the default trace impl will be used.
+        LF_TRACE_INSTALL: "../../../install",   // Relative to the generated C project directory
+    },
+    timeout: 5s,
+}
+
+import Sensor, Processing, Actuator from "lib/Components.lf"
+
+federated reactor {
+    s = new Sensor()
+    p = new Processing()
+    a = new Actuator()
+    s.out -> p.in
+    p.out -> a.in
+}

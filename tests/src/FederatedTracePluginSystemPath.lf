@@ -1,0 +1,24 @@
+/**
+ * This test shows the cleanest approach:
+ * enabled when the plugin installed to system path.
+ * To run this test successfully,
+ * install lf-trace-xronos on the repo root.
+ */
+target C {
+    tracing: true, // Turn on tracing.
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+    },
+    timeout: 5s,
+}
+
+import Sensor, Processing, Actuator from "lib/Components.lf"
+
+federated reactor {
+    s = new Sensor()
+    p = new Processing()
+    a = new Actuator()
+    s.out -> p.in
+    p.out -> a.in
+}

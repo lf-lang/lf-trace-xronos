@@ -195,3 +195,36 @@ jobs:
       - name: Run TracePluginCustomCmake
         run: ./tests/bin/TracePluginCustomCmake
         timeout-minutes: 2
+
+      #===========================================
+      # Test 4: FederatedTracePluginSystemPath.lf
+      # Federated version using system-installed plugin
+      #===========================================
+      - name: Compile FederatedTracePluginSystemPath.lf
+        run: lfc tests/src/FederatedTracePluginSystemPath.lf
+
+      - name: Run FederatedTracePluginSystemPath
+        run: ./tests/bin/FederatedTracePluginSystemPath
+        timeout-minutes: 2
+
+      #===========================================
+      # Test 5: FederatedTracePluginUserPath.lf
+      # Federated version using path: relative to .lf file
+      #===========================================
+      - name: Compile FederatedTracePluginUserPath.lf
+        run: lfc tests/src/FederatedTracePluginUserPath.lf
+
+      - name: Run FederatedTracePluginUserPath
+        run: ./tests/bin/FederatedTracePluginUserPath
+        timeout-minutes: 2
+
+      #===========================================
+      # Test 6: FederatedTracePluginCustomCmake.lf
+      # Federated version using cmake-include
+      #===========================================
+      - name: Compile FederatedTracePluginCustomCmake.lf
+        run: lfc tests/src/FederatedTracePluginCustomCmake.lf
+
+      - name: Run FederatedTracePluginCustomCmake
+        run: ./tests/bin/FederatedTracePluginCustomCmake
+        timeout-minutes: 2

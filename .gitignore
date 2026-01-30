@@ -3,4 +3,5 @@
 /install/
 tests/bin/
 tests/src-gen/
+tests/fed-gen/
 tests/include/

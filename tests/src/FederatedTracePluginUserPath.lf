@@ -1,0 +1,25 @@
+/**
+ * This test shows the best approach for the user who
+ * prefers a clean installation that can be easily removed later.
+ * To run this test successfully,
+ * install lf-trace-xronos on the system path.
+ */
+target C {
+    tracing: true, // Turn on tracing.
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+        path: "../../install/", // Relative to this LF file's location
+    },
+    timeout: 5s,
+}
+
+import Sensor, Processing, Actuator from "lib/Components.lf"
+
+federated reactor {
+    s = new Sensor()
+    p = new Processing()
+    a = new Actuator()
+    s.out -> p.in
+    p.out -> a.in
+}
