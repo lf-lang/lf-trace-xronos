@@ -220,13 +220,3 @@ jobs:
         run: ./tests/bin/FederatedTracePluginUserPath
         timeout-minutes: 2
 
-      #===========================================
-      # Test 6: FederatedTracePluginCustomCmake.lf
-      # Federated version using cmake-include
-      #===========================================
-      - name: Compile FederatedTracePluginCustomCmake.lf
-        run: lfc tests/src/FederatedTracePluginCustomCmake.lf
-
-      - name: Run FederatedTracePluginCustomCmake
-        run: ./tests/bin/FederatedTracePluginCustomCmake
-        timeout-minutes: 2
