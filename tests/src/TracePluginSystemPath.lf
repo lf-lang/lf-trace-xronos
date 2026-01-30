@@ -2,11 +2,14 @@
  * This test shows the cleanest approach:
  * enabled when the plugin installed to system path.
  * To run this test successfully,
- * install lf-trace-xronos on the repo root.
+ * install lf-trace-xronos to the system path.
  */
 target C {
-    tracing: true, // Turn on tracing.
-    cmake-include: ["trace-systempath.cmake"],
+    tracing: true,
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+    },
     timeout: 5s,
 }
 

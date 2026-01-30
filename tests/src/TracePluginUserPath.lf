@@ -2,11 +2,15 @@
  * This test shows the best approach for the user who
  * prefers a clean installation that can be easily removed later.
  * To run this test successfully,
- * install lf-trace-xronos on the system path.
+ * build and install lf-trace-xronos to ./install/.
  */
 target C {
-    tracing: true, // Turn on tracing.
-    cmake-include: ["trace-userpath.cmake"],
+    tracing: true,
+    trace-plugin: {
+        package: "lf-trace-xronos",
+        library: "lf::trace-impl",
+        path: "../../install/",
+    },
     timeout: 5s,
 }
 
