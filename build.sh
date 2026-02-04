@@ -38,21 +38,23 @@ while [[ $# -gt 0 ]]; do
     -h|--help)
       cat <<'EOF'
 Usage:
-  ./build.sh [--log-level <n>] [--prefix[=<prefix>] | --prefix <prefix>] [--install] [--clean] [--no-clean]
+  # Build (configure + build). Does NOT install:
+  ./build.sh [--log-level <n>] [--prefix <prefix> | --prefix=<prefix>] [--clean]
 
-Builds lib/liblf-trace-impl.a. Installation is optional.
+  # Install-only (no configure/build). Requires a prior build:
+  ./build.sh --install
 
-Behavior:
-  - Default: configure + build (no install step).
-  - --prefix <prefix>: set CMAKE_INSTALL_PREFIX at configure/build time.
-  - --install: install-only to the configured CMAKE_INSTALL_PREFIX (no rebuild; like `make install`).
+  # Clean dependencies only:
+  ./build.sh --clean
+
+Options:
+  --prefix <prefix>: set CMAKE_INSTALL_PREFIX at configure/build time.
+  --install: install-only to the configured CMAKE_INSTALL_PREFIX (no rebuild; like `make install`).
+  --clean: clears cached third-party dependencies in build/_deps/.
 
 Notes:
   - Installing to the default prefix may require admin privileges (e.g., sudo) depending on your system.
 
-Cleaning:
-  - Default is incremental builds (no cleaning).
-  - --clean clears only the top-level CMake cache files (keeps build/_deps/).
 EOF
       exit 0
       ;;
@@ -62,28 +64,6 @@ EOF
       ;;
   esac
 done
-
-# Clean step
-if [[ "${DO_CLEAN}" -eq 1 ]]; then
-  echo "Removing CMake cache and generated files..."
-  rm -f "${BUILD_DIR}/CMakeCache.txt"
-  rm -rf "${BUILD_DIR}/CMakeFiles/"
-  rm -f "${SCRIPT_DIR}/lib/liblf-trace-impl.a"
-  echo "Cache cleared. Dependencies preserved in ${BUILD_DIR}/_deps/"
-fi
-
-echo "Building lf-trace-impl..."
-cmake_args=(
-  -S "${SCRIPT_DIR}"
-  -B "${BUILD_DIR}"
-  -DLOG_LEVEL="${LOG_LEVEL}"
-  --no-warn-unused-cli
-)
-
-if [[ -n "${PREFIX}" ]]; then
-  PREFIX="$(mkdir -p "${PREFIX}" && cd "${PREFIX}" && pwd)"
-  cmake_args+=(-DCMAKE_INSTALL_PREFIX="${PREFIX}")
-fi
 
 # Install-only mode (mirrors `make install` / `cmake --install`):
 # - Do not configure or rebuild.
@@ -107,11 +87,38 @@ if [[ "${DO_INSTALL}" -eq 1 ]]; then
   exit 0
 fi
 
+# Clean step
+if [[ "${DO_CLEAN}" -eq 1 ]]; then
+  rm -rf "${BUILD_DIR}/_deps/"
+  echo "All dependencies cleaned."
+  exit 0
+fi
+
+# Make sure cache is cleaned before building
+# so that the install path gets updated for each build.
+echo "Removing CMake cache and generated files from previous builds..."
+rm -f "${BUILD_DIR}/CMakeCache.txt"
+rm -rf "${BUILD_DIR}/CMakeFiles/"
+rm -f "${SCRIPT_DIR}/lib/liblf-trace-impl.a"
+
+echo "Building lf-trace-impl..."
+cmake_args=(
+  -S "${SCRIPT_DIR}"
+  -B "${BUILD_DIR}"
+  -DLOG_LEVEL="${LOG_LEVEL}"
+  --no-warn-unused-cli
+)
+
+if [[ -n "${PREFIX}" ]]; then
+  PREFIX="$(mkdir -p "${PREFIX}" && cd "${PREFIX}" && pwd)"
+  cmake_args+=(-DCMAKE_INSTALL_PREFIX="${PREFIX}")
+fi
+
 cmake "${cmake_args[@]}"
 
 cmake --build "${BUILD_DIR}" -j8 --target lf-trace-impl
 echo "Build complete!"
 
 resolved_prefix="$(sed -n 's/^CMAKE_INSTALL_PREFIX:PATH=//p' "${BUILD_DIR}/CMakeCache.txt" | tail -n 1)"
-echo "Next, run the following to install: ./build.sh --install"
+echo "Next, run the following to install (you may need sudo): ./build.sh --install"
 echo "Plugin installation path: ${resolved_prefix}"
