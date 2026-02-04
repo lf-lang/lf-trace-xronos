@@ -14,6 +14,10 @@
 #include "otel_backend.h"
 #include "opentelemetry_c/opentelemetry_c.h"
 
+#ifndef OTEL_ENDPOINT
+#define OTEL_ENDPOINT "http://localhost:4317"
+#endif
+
 /** Macro to use when access to trace file fails. */
 #define _LF_TRACE_FAILURE(trace)                                                                                       \
   do {                                                                                                                 \
@@ -395,7 +399,7 @@ void lf_tracing_global_init(char* process_name, char* process_names, int fedid, 
 
   // Create backend
   backend = otel_backend_create(
-    "http://localhost:4317",
+    OTEL_ENDPOINT,
     "LF",
     "lf-lang.org",
     getpid()
