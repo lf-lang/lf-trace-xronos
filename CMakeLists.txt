@@ -64,12 +64,6 @@ if(NOT DEFINED LOG_LEVEL)
     message(FATAL_ERROR "You must set LOG_LEVEL cmake argument")
 endif()
 target_compile_definitions(lf-trace-impl PRIVATE LOG_LEVEL=${LOG_LEVEL})
-
-# OTEL_ENDPOINT: OpenTelemetry/dashboard endpoint URL
-if(NOT DEFINED OTEL_ENDPOINT)
-    set(OTEL_ENDPOINT "http://localhost:4317")
-endif()
-target_compile_definitions(lf-trace-impl PRIVATE OTEL_ENDPOINT="${OTEL_ENDPOINT}")
 # build type parameter (release, debug, etc) is implicitly handled by CMake
 
 # make name platform-independent

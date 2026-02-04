@@ -10,7 +10,6 @@ BUILD_DIR="${SCRIPT_DIR}/build"
 PREFIX=""  # Build-time CMAKE_INSTALL_PREFIX (set via --prefix). If empty, use CMake's default.
 
 LOG_LEVEL="${LOG_LEVEL:-4}"
-OTEL_ENDPOINT="${OTEL_ENDPOINT:-http://localhost:4317}"
 DO_CLEAN=0
 DO_INSTALL=0
 
@@ -32,14 +31,6 @@ while [[ $# -gt 0 ]]; do
       LOG_LEVEL="$2"
       shift 2
       ;;
-    --otel-endpoint)
-      OTEL_ENDPOINT="$2"
-      shift 2
-      ;;
-    --otel-endpoint=*)
-      OTEL_ENDPOINT="${1#--otel-endpoint=}"
-      shift 1
-      ;;
     --clean)
       DO_CLEAN=1
       shift 1
@@ -48,7 +39,7 @@ while [[ $# -gt 0 ]]; do
       cat <<'EOF'
 Usage:
   # Build (configure + build). Does NOT install:
-  ./build.sh [--log-level <n>] [--otel-endpoint <url>] [--prefix <prefix> | --prefix=<prefix>] [--clean]
+  ./build.sh [--log-level <n>] [--prefix <prefix> | --prefix=<prefix>] [--clean]
 
   # Install-only (no configure/build). Requires a prior build:
   ./build.sh --install
@@ -58,7 +49,6 @@ Usage:
 
 Options:
   --prefix <prefix>: set CMAKE_INSTALL_PREFIX at configure/build time.
-  --otel-endpoint <url>: set the OpenTelemetry/dashboard endpoint URL (default: http://localhost:4317).
   --install: install-only to the configured CMAKE_INSTALL_PREFIX (no rebuild; like `make install`).
   --clean: clears cached third-party dependencies in build/_deps/.
 
@@ -116,7 +106,6 @@ cmake_args=(
   -S "${SCRIPT_DIR}"
   -B "${BUILD_DIR}"
   -DLOG_LEVEL="${LOG_LEVEL}"
-  -DOTEL_ENDPOINT="${OTEL_ENDPOINT}"
   --no-warn-unused-cli
 )
 
@@ -133,4 +122,3 @@ echo "Build complete!"
 resolved_prefix="$(sed -n 's/^CMAKE_INSTALL_PREFIX:PATH=//p' "${BUILD_DIR}/CMakeCache.txt" | tail -n 1)"
 echo "Next, run the following to install (you may need sudo): ./build.sh --install"
 echo "Plugin installation path: ${resolved_prefix}"
-echo "OpenTelemetry endpoint: ${OTEL_ENDPOINT}"

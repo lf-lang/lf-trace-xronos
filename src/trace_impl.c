@@ -14,9 +14,10 @@
 #include "otel_backend.h"
 #include "opentelemetry_c/opentelemetry_c.h"
 
-#ifndef OTEL_ENDPOINT
-#define OTEL_ENDPOINT "http://localhost:4317"
-#endif
+// These are the standard OpenTelemetry OTLP endpoints:
+// gRPC endpoint - port 4317 (0.0.0.0:4317)
+// HTTP endpoint - port 4318 (0.0.0.0:4318)
+#define OTEL_ENDPOINT_DEFAULT "http://localhost:4317"
 
 /** Macro to use when access to trace file fails. */
 #define _LF_TRACE_FAILURE(trace)                                                                                       \
@@ -398,8 +399,12 @@ void lf_tracing_global_init(char* process_name, char* process_names, int fedid, 
   }
 
   // Create backend
+  const char* otel_endpoint = getenv("TRACE_PLUGIN_ENDPOINT");
+  if (!otel_endpoint || otel_endpoint[0] == '\0') {
+    otel_endpoint = OTEL_ENDPOINT_DEFAULT;
+  }
   backend = otel_backend_create(
-    OTEL_ENDPOINT,
+    otel_endpoint,
     "LF",
     "lf-lang.org",
     getpid()
